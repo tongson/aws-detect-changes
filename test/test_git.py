@@ -1,4 +1,3 @@
-
 import pytest
 import shutil
 import tempfile
@@ -31,5 +30,6 @@ def test_git_commit(setup_git_init):
     write_file = open(f"{cwd}/x", "w")
     print(f"test", file=write_file)
     git_commit(cwd, "xxx")
-    run = subprocess.run(["git", "log", "-1", "HEAD", "--pretty=format:%B"], cwd=cwd, text=True, check=True, capture_output=True)
+    run = subprocess.run(["git", "log", "-1", "HEAD", "--pretty=format:%B"],
+        cwd=cwd, text=True, check=True, capture_output=True)
     assert "xxx\n" == run.stdout
