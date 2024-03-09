@@ -2,25 +2,34 @@
 import json
 import os
 import subprocess
+import sys
 from typing import Dict, TextIO, List, Any
 
 JsonDict = Dict[str, Any]
+CompletedProcess = subprocess.CompletedProcess
 
 def git_init(cwd: str) -> None:
-    name = "AWS resource modification detection"
-    email = "aws@example.com"
     try:
-        subprocess.run(["git", "init"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd, check=True)
-        subprocess.run(["git", "config", "user.email", email], cwd=cwd, check=True)
-        subprocess.run(["git", "config", "user.name", name], cwd=cwd, check=True)
-        subprocess.run(["git", "add", "."], cwd=cwd, check=True)
+        me: str = __file__
+        hostname: str = os.uname().nodename
     except Exception as e:
-        e.add_note("\nError initializing Git directory")
+        e.add_note("\nError getting hostname")
         raise
+    else:
+        name = "AWS resource change detection"
+        email = f"{me}@{hostname}"
+        try:
+            subprocess.run(["git", "init"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd, check=True)
+            subprocess.run(["git", "config", "user.email", email], cwd=cwd, check=True)
+            subprocess.run(["git", "config", "user.name", name], cwd=cwd, check=True)
+            subprocess.run(["git", "add", "."], cwd=cwd, check=True)
+        except Exception as e:
+            e.add_note("\nError initializing Git directory")
+            raise
 
 def git_status(cwd: str) -> str:
     try:
-        changes = subprocess.run(["git", "status", "--short", "--porcelain=1"], cwd=cwd, text=True, check=True, capture_output=True)
+        changes: CompletedProcess = subprocess.run(["git", "status", "--short", "--porcelain=1"], cwd=cwd, text=True, check=True, capture_output=True)
     except Exception as e:
         e.add_note("\nError getting changes")
         raise
@@ -56,7 +65,6 @@ def process(account: str, data: JsonDict) -> None:
         else:
             git_init(git)
     
-
     region: str
     resource: JsonDict
     for region, resource in data["regions"].items():
@@ -82,16 +90,23 @@ def process(account: str, data: JsonDict) -> None:
                                 e.add_note("\nError opening file for writing")
                                 raise
                             else:
-                                print(f"{i}", file=write_file)
+                                try:
+                                    print(f"{i}", file=write_file)
+                                except Exception as e:
+                                    e.add_note("\nError writing file")
+                                    raise
                             finally:
                                 write_file.close()
             output = git_status(git)
-            if not len(output) == 0:
-                for line in output.splitlines():
-                    print(f"[{account}] {line}")
-                git_commit(git, output.replace('\n', ';'))
+            if len(output) == 0:
+                print(f"[{account}] No changes to {region}")
             else:
-                print(f"[{account}] No modifications to {region}")
+                commit: str = ""
+                for line in output.splitlines():
+                    msg = (f"[{account}] {line}")
+                    commit = (f"{commit}\n{msg}")
+                    print(msg)
+                git_commit(git, commit)
      
 def main() -> None:
     try:
@@ -105,9 +120,9 @@ def main() -> None:
         account, results = json_load(result)
         print(f"[{account}] Loaded results")
         process(account, results)
-        print(f"[{account}] Processed results")
     finally:
         result.close()
+        print(f"[{account}] Finished processing results")
 
 if __name__ == "__main__":
     main()
